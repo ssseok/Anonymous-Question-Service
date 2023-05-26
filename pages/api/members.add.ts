@@ -18,37 +18,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // 비동기 처리 과정에서 에러가 날 수 있으므로 try.
   try {
-    // 받은 정보들을 저장하는 코드
-    // members 라는 콜렉션에다가 저장하고 add로 어떤 정보를 넣을 수 있을지 특정할 수 있다.
-    // add의 특징은 추가를 해주면 특정 key로 나올 수 있게 반환해준다.
-    // uid 빼고는 존재하지 않을 수 있기 때문에 옵셔널로 빈 string 값을 준다.
-    // promise 이기 때문에 비동기 처리가 가능.
-    // doc(uid).set 즉 문서의 uid를 넣고 set 한다.
-    const addResult = await FirebaseAdmin.getInstance()
-      .Firebase.collection('members')
-      .doc(uid)
-      .set({
-        uid,
-        email,
-        displayName: displayName ?? '',
-        photoURL: photoURL ?? '',
-      });
-
-    // addResult 랑 코드가 비슷하지만, 다른점은 email 저장하는 방법이 다르다.
-    // screenName 변수를 보면 replace로 @gmail.com 을 떼고 email 을 저장한다는 뜻
-    // 예를 들어 luckseok1@gmail.com -> luckseok1
     const screenName = (email as string).replace('@gmail.com', '');
-    await FirebaseAdmin.getInstance()
-      .Firebase.collection('screen_names')
-      .doc(screenName)
-      .set({
-        uid,
-        email,
-        displayName: displayName ?? '',
-        photoURL: photoURL ?? '',
-      });
+    const addResult = await FirebaseAdmin.getInstance().Firebase.runTransaction(async (transaction) => {
+      const memberRef = FirebaseAdmin.getInstance().Firebase.collection('members').doc(uid);
+      const screenNameRef = FirebaseAdmin.getInstance().Firebase.collection('screen_names').doc(screenName);
+      const memberDoc = await transaction.get(memberRef);
+      // memberDoc 문서가 존재하면
+      if (memberDoc.exists) {
+        // 이미 추가된 상태
+        return false; // 실패
+      }
 
-    return res.status(200).json({ result: true, id: addResult });
+      const addData = { uid, email, displayName: displayName ?? '', photoURL: photoURL ?? '' };
+      await transaction.set(memberRef, addData);
+      await transaction.set(screenNameRef, addData);
+      return true; // 성공
+    });
+    if (addResult === false) {
+      return res.status(201).json({ result: true, id: uid });
+    }
+    return res.status(200).json({ result: true, id: uid });
   } catch (error) {
     console.error(error);
     res.status(500).json({ result: false });
