@@ -25,7 +25,6 @@ const GNB = function () {
   );
 
   const authInitialized = loading || authUser === null;
-  console.log(loading, authUser);
 
   return (
     <Box borderBottom={1} borderStyle="solid" borderColor="gray.200" bg="white">
